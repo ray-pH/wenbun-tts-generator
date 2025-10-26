@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"unicode/utf8"
+
 	"github.com/joho/godotenv"
 )
 
@@ -17,7 +20,7 @@ const (
 	languageCode  = "cmn-CN"
 	name          = "cmn-CN-Chirp3-HD-Achernar"
 	audioEncoding = "MP3"
-	speakingRate  = 1.0
+	speakingRate  = 0.9
 )
 
 var (
@@ -52,10 +55,24 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
+func isValidText(text string) bool {
+	if utf8.RuneCountInString(text) > 5 {
+		return false
+	}
+	// \\p{Han} is a Unicode property that matches Han characters.
+	match, _ := regexp.MatchString(`^[\p{Han}]+$`, text)
+	return match
+}
+
 func handleTTS(w http.ResponseWriter, r *http.Request) {
 	text := r.URL.Query().Get("text")
 	if text == "" {
 		http.Error(w, "Missing ?text= parameter", http.StatusBadRequest)
+		return
+	}
+
+	if !isValidText(text) {
+		http.Error(w, "Invalid text: must be all Chinese characters with a max length of 5", http.StatusBadRequest)
 		return
 	}
 
