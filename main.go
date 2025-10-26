@@ -59,6 +59,21 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filename := sanitizeFilename(text) + ".mp3"
+	filePath := filepath.Join(outputDir, filename)
+
+	// Check if the file already exists
+	if _, err := os.Stat(filePath); err == nil {
+		// File exists, serve it
+		log.Printf("Serving existing file: %s", filePath)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		http.ServeFile(w, r, filePath)
+		return
+	}
+
+	// File does not exist, generate it
+	log.Printf("Generating new file for text: %s", text)
+
 	apiURL := fmt.Sprintf("https://texttospeech.googleapis.com/v1/text:synthesize?key=%s", apiKey)
 	payload := fmt.Sprintf(`{
 		"input": {"text": %q},
@@ -93,16 +108,17 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the text itself as filename (cleaned for filesystem)
-	filename := sanitizeFilename(text) + ".mp3"
-	filePath := filepath.Join(outputDir, filename)
+	// Save the new file
 	if err := os.WriteFile(filePath, audio, 0644); err != nil {
 		http.Error(w, "Failed to save file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"file":"%s"}`, filePath)
+	log.Printf("Saved new file: %s", filePath)
+
+	// Serve the newly created file
+	w.Header().Set("Content-Type", "audio/mpeg")
+	http.ServeFile(w, r, filePath)
 }
 
 // sanitizeFilename ensures filename is valid and short enough.
