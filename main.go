@@ -23,6 +23,8 @@ const (
 	speakingRate  = 0.9
 )
 
+var allowedModels = [3]string{"cmn-CN-Chirp3-HD-Achernar", "cmn-CN-Wavenet-A", "cmn-CN-Wavenet-B"}
+
 var (
 	apiKey    string
 	outputDir string
@@ -82,8 +84,15 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	if modelName == "" {
 		modelName = defaultName
 	}
+	
+	if allowedModels[0] != modelName && allowedModels[1] != modelName && allowedModels[2] != modelName {
+		http.Error(w, "Invalid model: must be one of "+strings.Join(allowedModels[:], ", "), http.StatusBadRequest)
+		return
+	}
 
-	reset := query.Get("reset") == "true"
+	// don't allow reset
+	// reset := query.Get("reset") == "true"
+	reset := false
 
 	filename := sanitizeFilename(fmt.Sprintf("%s_%s", modelName, text)) + ".mp3"
 	filePath := filepath.Join(outputDir, filename)
