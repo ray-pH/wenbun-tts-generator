@@ -18,7 +18,7 @@ import (
 
 const (
 	languageCode  = "cmn-CN"
-	name          = "cmn-CN-Chirp3-HD-Achernar"
+	defaultName   = "cmn-CN-Chirp3-HD-Achernar"
 	audioEncoding = "MP3"
 	speakingRate  = 0.9
 )
@@ -65,7 +65,9 @@ func isValidText(text string) bool {
 }
 
 func handleTTS(w http.ResponseWriter, r *http.Request) {
-	text := r.URL.Query().Get("text")
+	query := r.URL.Query()
+
+	text := query.Get("text")
 	if text == "" {
 		http.Error(w, "Missing ?text= parameter", http.StatusBadRequest)
 		return
@@ -76,27 +78,36 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := sanitizeFilename(text) + ".mp3"
-	filePath := filepath.Join(outputDir, filename)
-
-	// Check if the file already exists
-	if _, err := os.Stat(filePath); err == nil {
-		// File exists, serve it
-		log.Printf("Serving existing file: %s", filePath)
-		w.Header().Set("Content-Type", "audio/mpeg")
-		http.ServeFile(w, r, filePath)
-		return
+	modelName := query.Get("model")
+	if modelName == "" {
+		modelName = defaultName
 	}
 
-	// File does not exist, generate it
-	log.Printf("Generating new file for text: %s", text)
+	reset := query.Get("reset") == "true"
+
+	filename := sanitizeFilename(fmt.Sprintf("%s_%s", modelName, text)) + ".mp3"
+	filePath := filepath.Join(outputDir, filename)
+
+	// Skip cache if reset=true
+	if !reset {
+		if _, err := os.Stat(filePath); err == nil {
+			log.Printf("Serving cached file: %s", filePath)
+			w.Header().Set("Content-Type", "audio/mpeg")
+			http.ServeFile(w, r, filePath)
+			return
+		}
+	} else {
+		log.Printf("Cache reset requested for: %s", text)
+	}
+
+	log.Printf("Generating new file for text: %s (model: %s)", text, modelName)
 
 	apiURL := fmt.Sprintf("https://texttospeech.googleapis.com/v1/text:synthesize?key=%s", apiKey)
 	payload := fmt.Sprintf(`{
 		"input": {"text": %q},
 		"voice": {"languageCode": "%s", "name": "%s"},
 		"audioConfig": {"audioEncoding": "%s", "speakingRate": %.2f}
-	}`, text, languageCode, name, audioEncoding, speakingRate)
+	}`, text, languageCode, modelName, audioEncoding, speakingRate)
 
 	resp, err := http.Post(apiURL, "application/json", io.NopCloser(strings.NewReader(payload)))
 	if err != nil {
@@ -105,11 +116,14 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	// log.Printf("Response body: %s", string(body)) // debug print
+
 	var result struct {
 		AudioContent string `json:"audioContent"`
 		Error        any    `json:"error,omitempty"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		http.Error(w, "Failed to parse response: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -143,8 +157,8 @@ func sanitizeFilename(s string) string {
 	s = strings.ReplaceAll(s, "/", "_")
 	s = strings.ReplaceAll(s, "\\", "_")
 	s = strings.TrimSpace(s)
-	if len([]rune(s)) > 30 {
-		s = string([]rune(s)[:30])
+	if len([]rune(s)) > 50 {
+		s = string([]rune(s)[:50])
 	}
 	return s
 }
