@@ -18,7 +18,7 @@ import (
 
 const (
 	languageCode  = "cmn-CN"
-	defaultName   = "cmn-CN-Chirp3-HD-Achernar"
+	defaultName   = "cmn-CN-Wavenet-B"
 	audioEncoding = "MP3"
 	speakingRate  = 0.9
 )
