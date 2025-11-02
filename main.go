@@ -90,10 +90,9 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reset := query.Get("reset") == "true"
-
 	// don't allow reset
-	// reset := false
+	// reset := query.Get("reset") == "true"
+	reset := false
 
 	filename := sanitizeFilename(fmt.Sprintf("%s_%s", modelName, text)) + ".mp3"
 	filePath := filepath.Join(outputDir, filename)
